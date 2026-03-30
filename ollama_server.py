@@ -18,7 +18,7 @@ OLLAMA_URL = "http://localhost:11434"
 
 # Model selection: coding tasks → coder model, everything else → general
 MODEL_CODING = "qwen2.5-coder:7b"
-MODEL_CODING_ALT = "deepseek-coder-v2:lite"  # deepseek coding, 16B Q4
+MODEL_CODING_ALT = "deepseek-coder:6.7b"  # deepseek coding, 3.8GB
 MODEL_GENERAL = "llama3.1:8b"
 MODEL_REASONING = "qwen3:8b"
 
