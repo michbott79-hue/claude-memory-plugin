@@ -2,8 +2,7 @@
 """
 Claude Memory — Session Startup Display
 Generates formatted context summary for the SessionStart hook.
-Replaces the need to call mem_context() manually.
-Version: 3.0
+Version: 3.1
 """
 
 import os
@@ -37,16 +36,6 @@ TYPE_EMOJI = {
     "progress": "✅",
     "blocker": "🚫",
     "note": "📝",
-}
-
-# Priority order for smart sorting (lower = higher priority)
-TYPE_PRIORITY = {
-    "blocker": 0,
-    "error": 1,
-    "decision": 2,
-    "discovery": 3,
-    "progress": 4,
-    "note": 5,
 }
 
 SEPARATOR = "────────────────────────────────────────────────────────────────────────"
@@ -119,11 +108,39 @@ def main():
             out.append(f"## Brief ({brief_row[1].strftime('%b %d %H:%M')})")
             out.append(brief_text)
 
+        # ── Pinned Observations ──
+        cur.execute(
+            "SELECT id, type, content, tags FROM observations "
+            "WHERE project = ? AND pinned = TRUE ORDER BY created_at DESC",
+            (project,),
+        )
+        pinned = cur.fetchall()
+        if pinned:
+            out.append("")
+            out.append(f"## 📌 Pinned ({len(pinned)})")
+            for p_id, p_type, p_content, p_tags in pinned:
+                emoji = TYPE_EMOJI.get(p_type, "📝")
+                preview = p_content[:150].replace("\n", " ")
+                tag = f" [{p_tags}]" if p_tags else ""
+                out.append(f"  #{p_id}  {emoji}  {preview}{tag}")
+
+        # ── Credentials ──
+        cur.execute(
+            "SELECT service, host, port, username FROM credentials WHERE project = ? ORDER BY service",
+            (project,),
+        )
+        creds = cur.fetchall()
+        if creds:
+            out.append("")
+            out.append(f"## 🔑 Credentials ({len(creds)})")
+            for svc, host, port, user in creds:
+                addr = f"{host}:{port}" if port else host
+                out.append(f"  {svc}: {addr} ({user})" if user else f"  {svc}: {addr}")
+
         # ── Blockers ──
         cur.execute(
             "SELECT id, content, tags FROM observations "
-            "WHERE project = ? AND type = 'blocker' "
-            "ORDER BY created_at DESC LIMIT 5",
+            "WHERE project = ? AND type = 'blocker' ORDER BY created_at DESC LIMIT 5",
             (project,),
         )
         blockers = cur.fetchall()
@@ -138,11 +155,10 @@ def main():
         # ── Timeline (7d) — smart priority sort ──
         cur.execute(
             "SELECT id, type, content, tags, created_at FROM observations "
-            "WHERE project = ? AND created_at > ? "
+            "WHERE project = ? AND created_at > ? AND pinned = FALSE "
             "ORDER BY DATE(created_at) DESC, "
             "FIELD(type, 'blocker', 'error', 'decision', 'discovery', 'progress', 'note'), "
-            "created_at DESC "
-            "LIMIT 20",
+            "created_at DESC LIMIT 20",
             (project, week_ago),
         )
         recent = cur.fetchall()
@@ -211,8 +227,8 @@ def main():
         out.append("")
         out.append(SEPARATOR)
         out.append(
-            "12 tools | mem_save · mem_search · mem_context · mem_stats · "
-            "mem_update · mem_delete"
+            "16 tools | mem_save · mem_search · mem_pin · mem_creds · "
+            "mem_resume · mem_update · mem_delete"
         )
         out.append("✓ Context loaded — skip mem_context() this session")
 
